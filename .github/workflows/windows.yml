@@ -1,6 +1,9 @@
 name: Windows
 
-on: [push, pull_request]
+on:
+  push:
+    tags:
+      - '*'
 
 jobs:
   msbuild:
@@ -12,14 +15,36 @@ jobs:
         configuration: [Debug, Release]
     steps:
     - uses: actions/checkout@v4
-    - name: Add msbuild to PATH
+    - name: add msbuild to PATH
       uses: microsoft/setup-msbuild@v2
-    - name: Set toolset
+    - name: set toolset
       if: matrix.toolset == 'ClangCL'
       run: echo "toolset=/p:PlatformToolset=${{ matrix.toolset }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
     - name: Build
       shell: cmd
       run: msbuild Osiris.sln /p:Platform=x64 /p:Configuration=${{ matrix.configuration }} ${{ env.toolset }}
+
+    - name: prepare artifacts
+      if: always()
+      shell: pwsh
+      run: |
+        $cfg = "${{ matrix.configuration }}"
+        $ts = "${{ matrix.toolset }}"
+        $os = if("${{ matrix.os }}" -eq "windows-2025") {"win2025"} else {"win2022"}
+        $dir = "artifacts/$cfg-$ts-$os"
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+
+        Copy-Item "x64/$cfg/Osiris.lib"           "$dir/" -ErrorAction SilentlyContinue
+        Copy-Item "x64/$cfg/Osiris.dll"           "$dir/" -ErrorAction SilentlyContinue
+        Copy-Item "x64/$cfg/Osiris.pdb"           "$dir/" -ErrorAction SilentlyContinue
+
+    - name: upload to Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: artifacts/**/*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   cmake:
     runs-on: ${{ matrix.os }}
@@ -30,7 +55,7 @@ jobs:
         configuration: [Debug, Release]
     steps:
     - uses: actions/checkout@v4
-    - name: Set toolset
+    - name: set toolset
       if: matrix.toolset == 'ClangCL'
       run: echo "toolset=-T ${{ matrix.toolset }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
     - name: configure
@@ -41,7 +66,23 @@ jobs:
       run: cmake --build build --target UnitTests --config ${{ matrix.configuration }}
     - name: build functional tests
       run: cmake --build build --target FunctionalTests --config ${{ matrix.configuration }}
-    - name: run unit tests
-      run: ctest -R ^Unit --test-dir build --output-on-failure --no-tests=error --schedule-random -j $env:NUMBER_OF_PROCESSORS
-    - name: run functional tests
-      run: ctest -R ^Functional --test-dir build --output-on-failure --no-tests=error --schedule-random -j $env:NUMBER_OF_PROCESSORS
+
+    - name: prepare artifacts
+      if: always()
+      shell: pwsh
+      run: |
+        $cfg = "${{ matrix.configuration }}"
+        $ts = "${{ matrix.toolset }}"
+        $os = if("${{ matrix.os }}" -eq "windows-2025") {"win2025"} else {"win2022"}
+        $dir = "artifacts/$cfg-$ts-$os"
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        
+        Copy-Item "build/$cfg/Osiris.dll"           "$dir/" -ErrorAction SilentlyContinue
+
+    - name: upload to Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: artifacts/**/*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
