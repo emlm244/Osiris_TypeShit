@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        compiler: [g++-15, clang++-21]
+        compiler: [g++-14, clang++-21]
         configuration: [Debug, Release]
     steps:
     - uses: actions/checkout@v4
