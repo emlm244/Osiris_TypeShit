@@ -34,10 +34,7 @@ jobs:
         $os = if("${{ matrix.os }}" -eq "windows-2025") {"win2025"} else {"win2022"}
         $dir = "artifacts/$cfg-$ts-$os"
         New-Item -ItemType Directory -Force -Path $dir | Out-Null
-
-        Copy-Item "x64/$cfg/Osiris.lib"           "$dir/" -ErrorAction SilentlyContinue
         Copy-Item "x64/$cfg/Osiris.dll"           "$dir/" -ErrorAction SilentlyContinue
-        Copy-Item "x64/$cfg/Osiris.pdb"           "$dir/" -ErrorAction SilentlyContinue
 
     - name: upload to Release
       if: startsWith(github.ref, 'refs/tags/')
@@ -81,7 +78,7 @@ jobs:
         Copy-Item "build/$cfg/Osiris.dll"           "$dir/" -ErrorAction SilentlyContinue
 
     - name: upload to Release
-      if: startsWith(github.ref, 'refs/tags/')
+      if: always()
       uses: softprops/action-gh-release@v2
       with:
         files: artifacts/**/*
