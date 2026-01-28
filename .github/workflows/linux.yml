@@ -46,10 +46,26 @@ jobs:
         cc="${{ matrix.compiler }}"
         mkdir -p "artifacts/$cfg-$cc"
         cp build/libOsiris.so "artifacts/$cfg-$cc/" 2>/dev/null || true
-    - name: upload to Release
-      if: always()
+    - name: Prepare release tag name
+      id: vars
+      run: |
+        branch="${GITHUB_REF#refs/heads/}"
+        echo "release_tag=nightly-${branch}" >> $GITHUB_OUTPUT
+        echo "release_name=Nightly ${{ github.sha }}" >> $GITHUB_OUTPUT
+    
+    - name: Create / Update draft release & upload assets
       uses: softprops/action-gh-release@v2
+      if: always()
       with:
-        files: artifacts/**/*
+        tag_name:     ${{ steps.vars.outputs.release_tag }}
+        name:         ${{ steps.vars.outputs.release_name }}
+        body:         |
+          Commit: ${{ github.sha }}
+          Branch: ${{ github.ref_name }}
+          Built:  ${{ github.event.head_commit.timestamp }}
+        draft:        true
+        prerelease:   true
+        fail_on_unmatched_files: false
+        files:        artifacts/**/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
