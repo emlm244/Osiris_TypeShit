@@ -1,0 +1,96 @@
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - '*'
+jobs:
+  windows-msbuild:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest]
+        toolset: [ClangCL, MSVC]
+        configuration: [Debug, Release]
+    steps:
+    - uses: actions/checkout@v4
+    - name: add msbuild to PATH
+      uses: microsoft/setup-msbuild@v2
+    - name: set toolset
+      if: matrix.toolset == 'ClangCL'
+      run: echo "toolset=/p:PlatformToolset=${{ matrix.toolset }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+    - name: Build
+      shell: cmd
+      run: msbuild Osiris.sln /p:Platform=x64 /p:Configuration=${{ matrix.configuration }} ${{ env.toolset }}
+    - name: prepare artifacts
+      if: always()
+      shell: pwsh
+      run: |
+        $cfg = "${{ matrix.configuration }}"
+        $ts = "${{ matrix.toolset }}"
+        $os = if("${{ matrix.os }}" -eq "windows-2025") {"win2025"} else {"win2022"}
+        $dir = "artifacts/$cfg-$ts-$os"
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        Copy-Item "x64/$cfg/*.dll"           "$dir/" -ErrorAction SilentlyContinue
+        Copy-Item "x64/$cfg/*.pdb"           "$dir/" -ErrorAction SilentlyContinue
+  linux-cmake:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [g++-15, clang++-21]
+        configuration: [Debug, Release]
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: install recent LLVM
+      if: startsWith(matrix.compiler, 'clang++-')
+      run: |
+        wget https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh ${{ endsWith(matrix.compiler, '21') && 21 }}
+
+    - name: install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y cmake ninja-build ${{ startsWith(matrix.compiler, 'g++') && matrix.compiler || '' }}
+
+    - name: configure
+      run: CXX=${{ matrix.compiler }} cmake -Werror=dev -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} -DENABLE_TESTS="unit;functional" -DCMAKE_COMPILE_WARNING_AS_ERROR=1 -DCMAKE_UNITY_BUILD=ON -DCMAKE_UNITY_BUILD_BATCH_SIZE=4 -G Ninja -B build
+
+    - name: build source
+      run: cmake --build build --target Osiris -j $(nproc)
+
+    - name: build unit tests
+      run: cmake --build build --target UnitTests -j $(nproc)
+
+    - name: build functional tests
+      run: cmake --build build --target FunctionalTests -j $(nproc)
+
+    - name: prepare artifacts
+      run: |
+        cfg="${{ matrix.configuration }}"
+        cc="${{ matrix.compiler }}"
+        mkdir -p "artifacts/$cfg-$cc"
+        cp build/*.so "artifacts/$cfg-$cc/" 2>/dev/null || true
+  release:
+      needs: [linux-cmake, windows-msbuild]
+      runs-on: ubuntu-latest
+      if: github.ref_type == 'branch'
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions/download-artifact@v4
+          with:
+            path: artifacts/
+            pattern: '*'
+  
+        - name: Create / Update rolling draft
+          uses: softprops/action-gh-release@v2
+          with:
+            tag_name:     nightly-${{ github.ref_name }}
+            name:         Nightly ${{ github.ref_name }} ${{ github.sha }}
+            body:         Built from ${{ github.sha }}
+            draft:        true
+            prerelease:   true
+            files:        artifacts/**/*
+            fail_on_unmatched_files: false
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
