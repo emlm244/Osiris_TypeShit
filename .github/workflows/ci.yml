@@ -28,13 +28,16 @@ jobs:
         $ts  = "${{ matrix.toolset }}".ToLower()
         $out = "dist"
         New-Item -ItemType Directory -Force -Path $out | Out-Null
-    
-        $dll = Get-ChildItem "x64/${{ matrix.configuration }}/*.dll" -First 1
-        $pdb = Get-ChildItem "x64/${{ matrix.configuration }}/*.pdb" -First 1
-    
+        
+        $dll = Get-ChildItem "x64/${{ matrix.configuration }}/*.dll" | Select-Object -First 1
+        $pdb = Get-ChildItem "x64/${{ matrix.configuration }}/*.pdb" | Select-Object -First 1
+        
+        if (-not $dll) { throw "DLL not found" }
+        
         if ($cfg -eq "debug") {
-          $zip = "$out/windows-$cfg-$ts.zip"
-          Compress-Archive -Path $dll.FullName, $pdb.FullName -DestinationPath $zip -Force
+          if (-not $pdb) { throw "PDB not found" }
+          Compress-Archive -Path $dll.FullName, $pdb.FullName `
+                           -DestinationPath "$out/windows-$cfg-$ts.zip" -Force
         }
         else {
           Copy-Item $dll "$out/windows-$cfg-$ts.dll"
@@ -82,13 +85,19 @@ jobs:
     - name: prepare artifacts
       run: |
         cfg=$(echo "${{ matrix.configuration }}" | tr A-Z a-z)
-        cc=$(echo "${{ matrix.compiler }}" | sed 's/++.*//' )
+        cc=$(echo "${{ matrix.compiler }}" | sed 's/++.*//')
         out=dist
-        mkdir -p $out
+        mkdir -p "$out"
     
-        so=$(ls build/*.so | head -n1)
+        so=$(find build -type f -name "*.so" | head -n1)
+        if [ -z "$so" ]; then
+          echo "ERROR: .so not found"
+          find build
+          exit 1
+        fi
+    
         cp "$so" "$out/linux-$cfg-$cc.so"
-    
+        
     - name: upload artifacts
       uses: actions/upload-artifact@v4
       with:
