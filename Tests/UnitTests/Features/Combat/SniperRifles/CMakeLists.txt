@@ -1,1 +1,0 @@
-target_sources(UnitTests PRIVATE NoScopeInaccuracyVisTests.cpp)

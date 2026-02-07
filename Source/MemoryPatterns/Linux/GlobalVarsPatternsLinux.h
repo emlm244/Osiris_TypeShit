@@ -7,6 +7,6 @@ struct GlobalVarsPatterns {
     [[nodiscard]] static consteval auto addClientPatterns(auto clientPatterns) noexcept
     {
         return clientPatterns
-            .template addPattern<OffsetToFrametime, CodePattern{"50 ? F3 0F 12 E2"}.add(1).read()>();
+            .template addPattern<OffsetToFrametime, CodePattern{"55 ? F3 0F 12 E2"}.add(1).read()>();
     }
 };

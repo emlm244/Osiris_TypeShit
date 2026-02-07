@@ -1,5 +1,0 @@
-add_subdirectory(BombPlantAlert)
-add_subdirectory(BombTimer)
-add_subdirectory(DefusingAlert)
-add_subdirectory(KillfeedPreserver)
-add_subdirectory(PostRoundTimer)
