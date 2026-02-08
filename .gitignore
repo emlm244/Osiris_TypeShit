@@ -27,6 +27,16 @@ bld/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
+
+# Local pattern validation artifacts
+UP-To-DatePatterns/
+build/
+.serena/
+
+# Local helper scripts (superseded by tools/patterns/*)
+scan_patterns.py
+find_new_patterns.py
+fix_patterns.py
 # Uncomment if you have tasks that create the project's static files in wwwroot
 #wwwroot/
 
